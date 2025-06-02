@@ -1,2 +1,0 @@
-export(panel_kmeans_estimation)
-export(panel_homogeneity_test)
