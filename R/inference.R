@@ -12,7 +12,7 @@
 #' @param estimated_k_means Output of panel_kmeans_estimation()
 #'
 #' @return List with final_interval (Intervals), test_stat (numeric), pval (numeric)
-#' @export
+#' 
 panel_kmeans_inference <- function(
     Z, id,
     k1, k2,
@@ -79,6 +79,7 @@ panel_kmeans_inference <- function(
 #'
 #' @return List with combined_stat, pairwise_pvalues, pairs, pvalue_combination
 #' @export
+#'
 panel_homogeneity_test <- function(
     Z, id,
     OmegaHat,

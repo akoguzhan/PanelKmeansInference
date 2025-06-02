@@ -221,7 +221,7 @@ weighted_deltahat <- function(rq, last_cl) {
 #'
 #' @return An "Intervals" object representing the truncation set S
 #' @keywords internal
-#' @export
+#' 
 compute_S <- function(rq, estimated_k_means) {
   requireNamespace("intervals")
 
