@@ -90,31 +90,44 @@ same_cl = function(cl1,cl2,K) {
 #'
 #' @return A list with:
 #' \describe{
-#'   \item{Zbar}{T x P matrix of time-wise cross-sectional averages}
-#'   \item{Z_panel}{NT x P matrix for clustering (unit-time stacked)}
+#'   \item{Zbar}{T x K matrix of time-wise cross-sectional averages}
+#'   \item{Z_panel}{NT x K matrix for clustering (unit-time stacked)}
 #'   \item{id_numeric}{Numeric vector of unit identifiers (1 to N)}
 #'   \item{time_numeric}{Numeric vector of time identifiers (1 to T)}
+#'   \item{id}{Original id vector, ordered}
+#'   \item{time}{Original time vector, ordered}
 #' }
 #' @keywords internal
-#' 
 panel_data_to_matrix <- function(df, id, time, Z_names) {
+  # Input checks
+  if (!is.data.frame(df)) stop("df must be a data frame.")
+  if (!all(c(id, time) %in% names(df))) stop("id and/or time columns not found in df.")
+  if (!all(Z_names %in% names(df))) stop("Some Z_names not found in df.")
+  
+  # Order by id and time
   df <- df[order(df[[id]], df[[time]]), ]
   
-  # Convert id and time to numeric
-  df$id_numeric <- as.numeric(factor(df[[id]]))
-  df$time_numeric <- as.numeric(factor(df[[time]]))
+  # Convert id and time to numeric (sequential, unique)
+  id_levels <- unique(df[[id]])
+  time_levels <- unique(df[[time]])
+  df$id_numeric <- match(df[[id]], id_levels)
+  df$time_numeric <- match(df[[time]], time_levels)
   
-  # T x P: time-averaged cross-sectional means
-  Zbar_df <- aggregate(df[, Z_names], by = list(df[[time]]), FUN = mean)
-  Zbar <- as.matrix(Zbar_df[, -1])
+  # T x K: time-averaged cross-sectional means
+  Zbar_df <- aggregate(df[, Z_names, drop = FALSE], by = list(df[[time]]), FUN = mean)
+  Zbar <- as.matrix(Zbar_df[, -1, drop = FALSE])
+  colnames(Zbar) <- Z_names
   
-  # NT x P: stacked (unit-major) matrix
-  Z_panel <- as.matrix(df[, Z_names])
+  # NT x K: stacked (unit-major) matrix
+  Z_panel <- as.matrix(df[, Z_names, drop = FALSE])
+  colnames(Z_panel) <- Z_names
   
   return(list(
     Zbar = Zbar,
     Z_panel = Z_panel,
     id_numeric = df$id_numeric,
-    time_numeric = df$time_numeric
+    time_numeric = df$time_numeric,
+    id = df[[id]],
+    time = df[[time]]
   ))
 }
