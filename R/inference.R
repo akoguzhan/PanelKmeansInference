@@ -5,6 +5,7 @@
 #'
 #' @param Z NT x P matrix of data used in inference
 #' @param id Numeric vector of unit identifiers (length NT)
+#' @param time Numeric vector of time identifiers (length NT)
 #' @param k1 First cluster index
 #' @param k2 Second cluster index
 #' @param OmegaHat GK x GK long-run variance matrix
@@ -12,9 +13,9 @@
 #' @param estimated_k_means Output of panel_kmeans_estimation()
 #'
 #' @return List with final_interval (Intervals), test_stat (numeric), pval (numeric)
-#' 
+#'
 panel_kmeans_inference <- function(
-    Z, id,
+    Z, id, time,
     k1, k2,
     OmegaHat,
     required_quantities = NULL,
@@ -24,24 +25,25 @@ panel_kmeans_inference <- function(
     required_quantities <- required_quantities(
       Z = Z,
       id = id,
+      time = time,
       k1 = k1,
       k2 = k2,
       gamma = estimated_k_means$final_cluster,
       OmegaHat = OmegaHat
     )
   }
-  
+
   Tobs <- required_quantities$Tobs
   K <- required_quantities$K
   P <- required_quantities$P
   Omega_ZTv_norm <- required_quantities$Omega_ZTv_norm
-  
+
   test_stat <- sqrt(Tobs) * Omega_ZTv_norm
   gestat <- intervals::Intervals(c(test_stat^2, Inf))
-  
+
   S <- compute_S(required_quantities, estimated_k_means)
   S <- suppressWarnings(intervals::interval_intersection(S, intervals::Intervals(c(0, Inf))))
-  
+
   if (nrow(S) > 1) {
     checks <- apply(S, 1, function(row) {
       nrow(suppressWarnings(intervals::interval_intersection(intervals::Intervals(row), gestat))) > 0
@@ -50,11 +52,11 @@ panel_kmeans_inference <- function(
       S <- S[checks, , drop = FALSE]
     }
   }
-  
+
   denom <- S^2
   numer <- suppressWarnings(intervals::interval_intersection(gestat, denom))
   pval <- TChisqRatioApprox(K * P, numer, denom)
-  
+
   list(
     final_interval = S,
     test_stat = test_stat,
@@ -68,6 +70,7 @@ panel_kmeans_inference <- function(
 #'
 #' @param Z NT x P matrix
 #' @param id Numeric vector of unit identifiers
+#' @param time Numeric vector of time identifiers
 #' @param OmegaHat Long-run variance matrix (GK x GK)
 #' @param estimated_k_means Output from panel_kmeans_estimation()
 #' @param pairs Optional matrix of cluster index pairs to test (each row: c(k1, k2)). If NULL, all unique pairs are tested.
@@ -81,12 +84,12 @@ panel_kmeans_inference <- function(
 #' @export
 #'
 panel_homogeneity_test <- function(
-    Z, id,
+    Z, id, time,
     OmegaHat,
     estimated_k_means,
     pairs = NULL,
     pcombine_fun = "pharmonic",
-    method = "H1",
+    method = "H2",
     order_k = NULL,
     r = NULL,
     epi = NULL
@@ -109,6 +112,7 @@ panel_homogeneity_test <- function(
     pvalues[j] <- panel_kmeans_inference(
       Z = Z,
       id = id,
+      time = time,
       k1 = k1,
       k2 = k2,
       OmegaHat = OmegaHat,
@@ -123,14 +127,12 @@ panel_homogeneity_test <- function(
     porder    = pmerge::porder(p = pvalues, k = order_k),
     pSimes    = pmerge::pSimes(p = pvalues, method = method),
     pharmonic = pmerge::pharmonic(p = pvalues, method = method),
-    pCauchy   = pmerge::pCauchy(p = pvalues, method = method, epi = epi),
     stop("Invalid pcombine_fun specified.")
   )
 
   list(
-    combined_stat = merge_result$stat,
     pairwise_pvalues = pvalues,
     pairs = pairs_out,
-    pvalue_combination = merge_result$pvalue
+    pvalue_combination = merge_result
   )
 }

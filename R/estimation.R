@@ -6,6 +6,7 @@
 #'
 #' @param Z NT x P matrix of variables for clustering (typically stacked by time)
 #' @param id NT-length vector of unit identifiers (repeating across time)
+#' @param time NT-length vector of time identifiers (repeating across units)
 #' @param K Integer; number of clusters. Required unless Kmax is provided.
 #' @param Kmax Optional; if provided, perform BIC-based selection from 2 to Kmax clusters.
 #' @param Ninit Number of random initializations
@@ -15,122 +16,64 @@
 #' @return A list with: clusters, centers, objectives, iter, final_cluster, BIC_selected_K (if Kmax is used)
 #' @export
 panel_kmeans_estimation <- function(
-    Z, id,
+    Z, id, time,
     K = NULL, Kmax = NULL,
     Ninit = 10, iter.max = 10,
     n_cores = 1) {
 
   if (!is.matrix(Z)) stop("Z must be a matrix")
   if (length(id) != nrow(Z)) stop("Length of id must match number of rows in Z")
+  if (length(time) != nrow(Z)) stop("Length of time must match number of rows in Z")
 
   N <- length(unique(id))
-  Tobs <- sum(id == id[1])
+  Tobs <- length(unique(time))
   P <- ncol(Z)
   NT <- N * Tobs
   kappa <- 3
 
   estimate_kmeans <- function(K) {
-    # Use parallelization for random initializations
-    if (n_cores > 1) {
-      parallel_pkg <- requireNamespace("parallel", quietly = TRUE)
-      if (!parallel_pkg) stop("The 'parallel' package is required for parallel execution.")
-      cl <- parallel::makeCluster(n_cores)
-      on.exit(parallel::stopCluster(cl))
-      results <- parallel::parLapply(cl, 1:Ninit, function(dummy) {
-        cluster_assign_list <- vector("list", iter.max + 1)
-        centroid_list <- vector("list", iter.max + 1)
-        objective_value <- vector("list", iter.max + 1)
+    results <- list()
+    reps <- 1
+    while (reps <= Ninit) {
+      cluster_assign_list <- vector("list", iter.max + 1)
+      centroid_list <- vector("list", iter.max + 1)
+      objective_value <- vector("list", iter.max + 1)
 
-        iter <- 0
-        gamma <- sample(1:K, size = N, replace = TRUE)
-        gamma_tot <- rep(gamma, each = Tobs)
-        theta <- aggregate_matrix(Z, gamma_tot)
+      iter <- 0
+      gamma <- sample(1:K, size = N, replace = TRUE)
+      gamma_tot <- rep(gamma, each = Tobs)
+      theta <- aggregate_matrix(Z, gamma_tot)
 
+      iter <- iter + 1
+      distance_matrix <- squared_distance(theta, Z)
+      id_unique <- unique(id)
+      objectives <- aggregate_matrix(t(distance_matrix), match(id, id_unique)) * Tobs
+      gamma <- apply(objectives, 1, which.min)
+      gamma_tot <- rep(gamma, each = Tobs)
+
+      if (length(unique(gamma)) != K) next
+
+      centroid_list[[iter]] <- theta
+      cluster_assign_list[[iter]] <- gamma
+      objective_value[[iter]] <- sum(apply(objectives, 2, min))
+
+      same_cluster <- FALSE
+      while (iter <= iter.max && !same_cluster) {
         iter <- iter + 1
+        theta <- aggregate_matrix(Z, gamma_tot)
         distance_matrix <- squared_distance(theta, Z)
-        id_unique <- unique(id)
         objectives <- aggregate_matrix(t(distance_matrix), match(id, id_unique)) * Tobs
         gamma <- apply(objectives, 1, which.min)
         gamma_tot <- rep(gamma, each = Tobs)
 
-        if (length(unique(gamma)) != K) return(NULL)
-
         centroid_list[[iter]] <- theta
         cluster_assign_list[[iter]] <- gamma
+        same_cluster <- same_cl(gamma, cluster_assign_list[[iter - 1]], K)
         objective_value[[iter]] <- sum(apply(objectives, 2, min))
+      }
 
-        same_cluster <- FALSE
-        while (iter <= iter.max && !same_cluster) {
-          iter <- iter + 1
-          theta <- aggregate_matrix(Z, gamma_tot)
-          distance_matrix <- squared_distance(theta, Z)
-          objectives <- aggregate_matrix(t(distance_matrix), match(id, id_unique)) * Tobs
-          gamma <- apply(objectives, 1, which.min)
-          gamma_tot <- rep(gamma, each = Tobs)
-
-          centroid_list[[iter]] <- theta
-          cluster_assign_list[[iter]] <- gamma
-          same_cluster <- same_cl(gamma, cluster_assign_list[[iter - 1]], K)
-          objective_value[[iter]] <- sum(apply(objectives, 2, min))
-        }
-
-        cluster_assign_list <- cluster_assign_list[1:iter]
-        centroid_list <- centroid_list[1:iter]
-        objective_value <- objective_value[1:iter]
-        gamma_final <- cluster_assign_list[[iter]]
-        names(gamma_final) <- as.character(seq_along(gamma_final))
-
-        list(
-          clusters = cluster_assign_list,
-          centers = centroid_list,
-          objectives = objective_value,
-          iter = iter,
-          final_cluster = gamma_final
-        )
-      })
-      # Remove failed initializations (NULLs)
-      results <- Filter(Negate(is.null), results)
-    } else {
-      results <- list()
-      reps <- 1
-      while (reps <= Ninit) {
-        cluster_assign_list <- vector("list", iter.max + 1)
-        centroid_list <- vector("list", iter.max + 1)
-        objective_value <- vector("list", iter.max + 1)
-
-        iter <- 0
-        gamma <- sample(1:K, size = N, replace = TRUE)
-        gamma_tot <- rep(gamma, each = Tobs)
-        theta <- aggregate_matrix(Z, gamma_tot)
-
-        iter <- iter + 1
-        distance_matrix <- squared_distance(theta, Z)
-        id_unique <- unique(id)
-        objectives <- aggregate_matrix(t(distance_matrix), match(id, id_unique)) * Tobs
-        gamma <- apply(objectives, 1, which.min)
-        gamma_tot <- rep(gamma, each = Tobs)
-
-        if (length(unique(gamma)) != K) next else reps <- reps + 1
-
-        centroid_list[[iter]] <- theta
-        cluster_assign_list[[iter]] <- gamma
-        objective_value[[iter]] <- sum(apply(objectives, 2, min))
-
-        same_cluster <- FALSE
-        while (iter <= iter.max && !same_cluster) {
-          iter <- iter + 1
-          theta <- aggregate_matrix(Z, gamma_tot)
-          distance_matrix <- squared_distance(theta, Z)
-          objectives <- aggregate_matrix(t(distance_matrix), match(id, id_unique)) * Tobs
-          gamma <- apply(objectives, 1, which.min)
-          gamma_tot <- rep(gamma, each = Tobs)
-
-          centroid_list[[iter]] <- theta
-          cluster_assign_list[[iter]] <- gamma
-          same_cluster <- same_cl(gamma, cluster_assign_list[[iter - 1]], K)
-          objective_value[[iter]] <- sum(apply(objectives, 2, min))
-        }
-
+      # Only keep results with exactly K clusters
+      if (length(unique(gamma)) == K) {
         cluster_assign_list <- cluster_assign_list[1:iter]
         centroid_list <- centroid_list[1:iter]
         objective_value <- objective_value[1:iter]
@@ -144,6 +87,7 @@ panel_kmeans_estimation <- function(
           iter = iter,
           final_cluster = gamma_final
         )
+        reps <- reps + 1
       }
     }
     # Select the best result (lowest objective)

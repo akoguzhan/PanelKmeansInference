@@ -10,7 +10,7 @@
 #' @param k1 First cluster index (scalar)
 #' @param k2 Second cluster index (scalar)
 #' @param gamma Vector of length N with estimated cluster labels
-#' @param OmegaHat GK x GK long-run variance-covariance matrix
+#' @param OmegaHat KP x KP long-run variance-covariance matrix
 #'
 #' @return A list of required quantities for computing truncation intervals
 #' @keywords internal
@@ -84,7 +84,7 @@ required_quantities <- function(Z, id, time, k1, k2, gamma, OmegaHat) {
 #' @keywords internal
 #'
 norm_sq_phi_panel <- function(rq, i, j) {
-  requireNamespace(Rfast)
+  require(Rfast)
   
   # Extract inputs
   id <- rq$id
@@ -144,7 +144,7 @@ norm_sq_phi_panel <- function(rq, i, j) {
 norm_phi_canonical_panel <- function(rq, i, k,
                                      last_centroids,
                                      weighted_deltahat) {
-  requireNamespace(Rfast)
+  require(Rfast)
   
   # Extract inputs
   id <- rq$id
@@ -166,7 +166,7 @@ norm_phi_canonical_panel <- function(rq, i, k,
   D_deltahat <- deltahat_i - weighted_deltahat[k]
   D_Z <- Rfast::eachrow(Z_i, last_centroids[k, ], "-")
   dot_product <- rowSums(Rfast::eachrow(D_Z, t(dir_ZTv), "*"))
-  
+
   # Coefficients
   a_tilde <- nr^2 * (D_deltahat / (sqrt(Tobs) * v_norm^2))^2
   b_tilde <- 2 * nr * (
@@ -175,7 +175,7 @@ norm_phi_canonical_panel <- function(rq, i, k,
   )
   resid <- Rfast::eachrow(D_Z, D_deltahat * ZTv / v_norm^2, "-")
   c_tilde <- rowSums(resid * resid)
-  
+
   return(list(
     quad = Tobs * a_tilde,
     linear = sum(b_tilde),
@@ -223,7 +223,7 @@ weighted_deltahat <- function(rq, last_cl) {
 #' @keywords internal
 #' 
 compute_S <- function(rq, estimated_k_means) {
-  requireNamespace("intervals")
+  require(intervals)
 
   # Extract cluster assignment and center history
   cluster_path <- do.call(rbind, estimated_k_means$clusters)
@@ -238,66 +238,53 @@ compute_S <- function(rq, estimated_k_means) {
 
   all_interval_lists <- list()
 
-  # --- Initialization step: assignments given initial centers ---
-  # The first row of cluster_path is the initial assignment (random), 
-  # the first element of centroid_path is the initial centers.
-  # The *second* row of cluster_path is the first Lloyd assignment.
-  if (M >= 2) {
-    initial_centers <- centroid_path[[1]]
-    first_assignment <- cluster_path[2, ] # after first Lloyd update
-
-    for (i in seq_len(N)) {
-      id_i <- ids[i]
-      assigned_k <- first_assignment[i]
-      # For each possible cluster, encode the assignment event
-      for (k in seq_len(K)) {
-        # Only need to encode for k != assigned_k
-        if (k != assigned_k) {
-          # Compute quadratic for assigned cluster and for alternative cluster
-          g_star_quad <- norm_phi_canonical_panel(rq, id_i, assigned_k, initial_centers, weighted_deltahat = rep(0, K))
-          k_quad <- norm_phi_canonical_panel(rq, id_i, k, initial_centers, weighted_deltahat = rep(0, K))
-          coeffs <- minus_quad_ineq(g_star_quad, k_quad)
-          interval <- solve_one_ineq_complement(coeffs$quad, coeffs$linear, coeffs$constant)
-          all_interval_lists[[length(all_interval_lists) + 1]] <- interval
-        }
-      }
-    }
-  }
-
   # --- Lloyd iterations: assignments given previous centers ---
   # For m = 3,...,M (since m=2 is the first Lloyd assignment)
-  if (M > 2) {
-    for (m in 3:M) {
-      current_assignment <- cluster_path[m, ]
-      previous_assignment <- cluster_path[m - 1, ]
-      last_centroids <- centroid_path[[m - 1]]
-      wdelta <- weighted_deltahat(rq, previous_assignment)
+# ...existing code...
 
-      for (i in seq_len(N)) {
-        id_i <- ids[i]
-        assigned_k <- current_assignment[i]
-        for (k in seq_len(K)) {
-          if (k != assigned_k) {
-            g_star_quad <- norm_phi_canonical_panel(rq, id_i, assigned_k, last_centroids, wdelta)
-            k_quad <- norm_phi_canonical_panel(rq, id_i, k, last_centroids, wdelta)
-            coeffs <- minus_quad_ineq(g_star_quad, k_quad)
-            interval <- solve_one_ineq_complement(coeffs$quad, coeffs$linear, coeffs$constant)
-            all_interval_lists[[length(all_interval_lists) + 1]] <- interval
-          }
-        }
+  # Keep track of the list elements
+  curr_length <- length(all_interval_lists)
+  curr_counter <- 1
+
+  # Loop through all sequence m
+  for (l in 2:M) {
+    current_cl <- cluster_path[l, ]
+    last_cl <- cluster_path[l - 1, ]
+    last_centroids <- centroid_path[[l]]
+    weighted_deltahat_res <- weighted_deltahat(rq, last_cl)
+
+    # Loop through all the observations
+    for (i in 1:N) {
+      current_id <- ids[i]
+      current_cl_i <- current_cl[i]
+      g_star_quad <- norm_phi_canonical_panel(rq,
+                                              current_id, current_cl_i,
+                                              last_centroids,
+                                              weighted_deltahat_res)
+
+      for (g in 1:K) {
+        g_current_quad <- norm_phi_canonical_panel(rq,
+                                                    current_id, g,
+                                                    last_centroids,
+                                                    weighted_deltahat_res)
+
+        curr_quad <- minus_quad_ineq(g_star_quad, g_current_quad)
+        curr_interval <- solve_one_ineq_complement(curr_quad$quad, curr_quad$linear, curr_quad$constant)
+        # interval update
+        all_interval_lists[[curr_length + curr_counter]] <- curr_interval
+        curr_counter <- curr_counter + 1
       }
     }
   }
+ 
+  # final intervals look correct -- try to find truncation?
+  final_interval_complement = do.call('c',all_interval_lists)
+  final_interval_complement = matrix(final_interval_complement,ncol=2,byrow=T)
+  final_interval_complement = intervals::reduce(intervals::Intervals(final_interval_complement),check_valid=FALSE)
 
-  # --- Final intersection: compute S ---
-  if (length(all_interval_lists) == 0) {
-    stop("No truncation intervals were generated.")
-  }
-  raw_matrix <- matrix(do.call(c, all_interval_lists), ncol = 2, byrow = TRUE)
-  complement_intervals <- intervals::reduce(intervals::Intervals(raw_matrix), check_valid = FALSE)
-  final_S <- intervals::interval_complement(complement_intervals)
+  final_interval_chisq = intervals::interval_complement(final_interval_complement)
 
-  return(final_S)
+  return(final_interval_chisq)
 }
 
 #' Implement the minus operation for two quadratic inequalities
