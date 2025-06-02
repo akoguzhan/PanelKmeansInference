@@ -29,13 +29,10 @@ squared_distance <- function(A, B) {
 #' @keywords internal
 aggregate_matrix <- function(X, v) {
   if (!is.matrix(X)) stop("X must be a matrix.")
-  groups <- sort(unique(v))
-  K <- length(groups)
-  P <- ncol(X)
-  Xbar <- matrix(NA, nrow = K, ncol = P)
-  for (g in seq_len(K)) {
-    Xbar[g, ] <- colMeans(X[v == groups[g], , drop = FALSE])
-  }
+  v <- as.factor(v)
+  counts <- as.numeric(table(v))
+  group_sums <- rowsum(X, v)
+  Xbar <- sweep(group_sums, 1, counts, FUN = "/")
   return(Xbar)
 }
 
@@ -83,80 +80,6 @@ same_cl = function(cl1,cl2,K) {
   same_up_to_perm = sum(tab != 0) == K
   return(same_up_to_perm)
 }
-
-#' Long-run Variance Estimation via Newey-West
-#'
-#' @description Estimates the long-run variance of a time series using the Newey-West estimator.
-#'
-#' @param X A TxK numeric matrix.
-#' @param maxlag An integer specifying the maximum lag order.
-#'
-#' @return A KxK estimated long-run variance matrix.
-#' @keywords internal
-#' 
-NeweyWest = function(X,maxlag) {
-  X = as.matrix(X)
-  Tobs = NROW(X)
-  P = NCOL(X)
-  if (P==1) {
-    X = X - mean(X)
-  } else {
-    X = scale(X,scale=F)
-  }
-  samplevar = t(X)%*%X/Tobs
-  OmegaHat = samplevar
-  if (maxlag > 0) {
-    gamma = matrix(NA,maxlag,P)
-    for (h in 1:maxlag) {
-      if (P==1){
-        Xlag = c(matrix(0,h,P),X[1:(Tobs-h),])
-      } else {
-        Xlag = rbind(matrix(0,h,P),X[1:(Tobs-h),])
-      }
-      gamma = (t(X)%*%Xlag + t(Xlag)%*%X)/Tobs
-      weights = 1 - (h/(maxlag+1))
-      OmegaHat = OmegaHat + weights*gamma
-    }
-  }
-  return(OmegaHat)
-}
-
-#' Long-run Variance Estimation via Eigenvalue Weighted Covariance (EWC)
-#'
-#' @description Estimates the long-run variance using the Eigenvalue Weighted Covariance estimator.
-#'
-#' @param X A TxK numeric matrix.
-#' @param B An integer; number of base estimators (e.g., harmonic terms).
-#'
-#' @return A KxK estimated long-run variance matrix.
-#' @keywords internal
-#' 
-EWC = function(X,B) {
-  X = as.matrix(X)
-  Tobs = NROW(X)
-  if (B==Tobs) {
-    OmegaHat = NeweyWest(X,0)
-  } else {
-    P = NCOL(X)
-    if (P==1) {
-      X = X - mean(X)
-    } else {
-      X = scale(X,scale=F)
-    }
-    C1 = cos(pi*(seq(1:Tobs)-1/2)/Tobs)
-    L1 = sqrt(2/Tobs)*t(X)%*%C1
-    OmegaHat = (L1%*%t(L1))/B
-    if (B > 1) {
-      for (j in 2:B) {
-        Cj = cos(pi*j*(seq(1:Tobs)-1/2)/Tobs)
-        Lj = sqrt(2/Tobs)*t(X)%*%Cj
-        OmegaHat = OmegaHat + (Lj%*%t(Lj))/B
-      }
-    }
-  }
-  return(OmegaHat)
-}
-
 
 #' Convert Balanced Panel Data to Matrix Forms for EPA Testing and KMeans
 #'
