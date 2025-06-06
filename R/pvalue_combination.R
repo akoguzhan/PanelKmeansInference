@@ -1,3 +1,49 @@
+#' Grid Inverse-U Test (Adaptive Spreng–Urga Combination)
+#'
+#' Combines multiple p-values using an adaptive inverse-moment (Inverse-U) rule
+#' proposed by Spreng and Urga (2023), evaluated over a grid of inverse powers.
+#' This method is powerful under sparse alternatives and robustified via grid search.
+#'
+#' @param pvals A numeric vector of p-values (all in [0, 1]).
+#' @param r_min Minimum inverse moment power (default: 5).
+#' @param r_max Maximum inverse moment power (default: 50).
+#' @param n_grid Number of grid points (default: 25).
+#' @param adjust Logical; whether to apply Bonferroni correction for grid search (default: TRUE).
+#'
+#' @return A list with:
+#' \describe{
+#'   \item{p_grid}{Vector of pseudo p-values across the r-grid}
+#'   \item{r_grid}{The grid of r values}
+#'   \item{min_p}{Minimum pseudo p-value}
+#'   \item{selected_r}{The r value achieving min_p}
+#'   \item{adjusted_p}{Bonferroni-adjusted combined p-value if \code{adjust = TRUE}}
+#' }
+#' @export
+grid_iu_test <- function(pvals, r_min = 5, r_max = 50, n_grid = 25, adjust = TRUE) {
+  if (any(is.na(pvals)) || any(pvals < 0) || any(pvals > 1)) {
+    stop("All p-values must be in [0, 1] and non-NA.")
+  }
+  n <- length(pvals)
+  r_grid <- seq(r_min, r_max, length.out = n_grid)
+
+  # Vectorized calculation
+  mean_pvals_neg_r <- vapply(r_grid, function(r) mean(pvals^(-r)), numeric(1))
+  F_r <- mean_pvals_neg_r^(1 / r_grid)
+  p_grid <- pmin((r_grid / (r_grid - 1)) * (1 / F_r), 1)
+
+  min_idx <- which.min(p_grid)
+  min_p <- p_grid[min_idx]
+  r_star <- r_grid[min_idx]
+  adj_p <- if (adjust) min(1, n_grid * min_p) else min_p
+
+  list(
+    p_grid = p_grid,
+    r_grid = r_grid,
+    min_p = min_p,
+    selected_r = r_star,
+    adjusted_p = adj_p
+  )
+}
 
 #' IU P-value Combination Test (Spreng and Urga, 2022)
 #'

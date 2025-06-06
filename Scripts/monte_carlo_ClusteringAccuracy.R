@@ -17,7 +17,7 @@ Tobs <- 40
 P <- 2
 K_true <- 3
 Kmax <- 5
-n_sim <- 200
+n_sim <- 500
 
 # DGP function
 simulate_panel_data <- function(N, Tobs, P, K, separation = 0) {
@@ -48,7 +48,7 @@ rand_recovery <- function(true, est) {
 }
 
 # Monte Carlo loop
-results <- matrix(NA, nrow = n_sim, ncol = 5)
+results <- matrix(NA, nrow = n_sim, ncol = 6)
 alpha <- 0.05
 
 for (sim in 1:n_sim) {
@@ -67,16 +67,18 @@ for (sim in 1:n_sim) {
     K = 3,
     pcombine_fun = "pmean",
     method = "A",
-    r = 0,
+    r = mean(c(1/4,4)),
     n_cores = (detectCores(logical = FALSE) - 1)
   )
   hom_pval <- hom_test$pvalue_combination
   results[sim,1] <- hom_pval
-  results[sim,2] <- bonferroni_p(hom_test$pairwise_pvalues)
-  results[sim,3:5] <- hom_test$pairwise_pvalues
+  results[sim,2] <- grid_iu_test(hom_test$pairwise_pvalues, adjust = FALSE)$adjusted_p
+  results[sim,3] <- iu_test(hom_test$pairwise_pvalues)$pval_combined
+  results[sim,4:6] <- hom_test$pairwise_pvalues
 }
 
 # Summary
 mean(results[,1]<0.05)
 mean(results[,2]<0.05)
-mean(results[,3:5]<0.05)
+mean(results[,3]<0.05)
+mean(results[,4:6]<0.05)

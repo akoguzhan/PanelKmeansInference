@@ -98,7 +98,6 @@ panel_homogeneity_test <- function(
     method = "A",
     order_k = NULL,
     r = NULL,
-    epi = 0.05,
     n_cores = 1
 ) {
   # Estimate clusters
