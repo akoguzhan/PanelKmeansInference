@@ -13,6 +13,8 @@
 #' D <- squared_distance(A, B)
 #' @keywords internal
 squared_distance <- function(A, B) {
+  A <- as.matrix(A)
+  B <- as.matrix(B)
   A_sq <- rowSums(A^2)
   B_sq <- rowSums(B^2)
   outer(A_sq, B_sq, "+") - 2 * (A %*% t(B))
@@ -130,4 +132,39 @@ panel_data_to_matrix <- function(df, id, time, Z_names) {
     id = df[[id]],
     time = df[[time]]
   ))
+}
+
+#' Convert Matrix and Index Vectors to Panel Data Frame
+#'
+#' @description
+#' Converts a matrix (typically NT x K, unit-time stacked) and associated id/time vectors
+#' into a long-format data.frame suitable for panel analysis.
+#'
+#' @param Z_panel A numeric matrix of size NT x K (variables stacked by unit and time).
+#' @param Z_names Character vector of variable names (length K).
+#' @param id Vector of unit identifiers (length NT).
+#' @param time Vector of time identifiers (length NT).
+#'
+#' @return A data.frame with columns: id, time, and variables in Z_names.
+#' @examples
+#' Z_panel <- matrix(rnorm(20), nrow = 10, ncol = 2)
+#' id <- rep(1:5, each = 2)
+#' time <- rep(1:2, times = 5)
+#' df <- matrix_to_panel_data(Z_panel, c("x1", "x2"), id, time)
+#' @keywords internal
+matrix_to_panel_data <- function(Z_panel, Z_names, id, time) {
+  if (!is.matrix(Z_panel)) stop("Z_panel must be a matrix.")
+  if (ncol(Z_panel) != length(Z_names)) stop("Length of Z_names must match number of columns in Z_panel.")
+  if (length(id) != nrow(Z_panel)) stop("Length of id must match number of rows in Z_panel.")
+  if (length(time) != nrow(Z_panel)) stop("Length of time must match number of rows in Z_panel.")
+
+  df <- as.data.frame(Z_panel)
+  colnames(df) <- Z_names
+  df[[ "id" ]] <- id
+  df[[ "time" ]] <- time
+
+  # Reorder columns: id, time, then variables
+  df <- df[, c("id", "time", Z_names)]
+  rownames(df) <- NULL
+  return(df)
 }

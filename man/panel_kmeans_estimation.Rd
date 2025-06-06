@@ -7,6 +7,7 @@
 panel_kmeans_estimation(
   Z,
   id,
+  time,
   K = NULL,
   Kmax = NULL,
   Ninit = 10,
@@ -18,6 +19,8 @@ panel_kmeans_estimation(
 \item{Z}{NT x P matrix of variables for clustering (typically stacked by time)}
 
 \item{id}{NT-length vector of unit identifiers (repeating across time)}
+
+\item{time}{NT-length vector of time identifiers (repeating across units)}
 
 \item{K}{Integer; number of clusters. Required unless Kmax is provided.}
 

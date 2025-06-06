@@ -7,6 +7,7 @@
 panel_kmeans_inference(
   Z,
   id,
+  time,
   k1,
   k2,
   OmegaHat,
@@ -18,6 +19,8 @@ panel_kmeans_inference(
 \item{Z}{NT x P matrix of data used in inference}
 
 \item{id}{Numeric vector of unit identifiers (length NT)}
+
+\item{time}{Numeric vector of time identifiers (length NT)}
 
 \item{k1}{First cluster index}
 

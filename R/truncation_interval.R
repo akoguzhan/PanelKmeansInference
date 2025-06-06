@@ -76,6 +76,14 @@ required_quantities <- function(Z, id, time, k1, k2, gamma, OmegaHat) {
 #' Computes the coefficients of a quadratic function in φ representing the 
 #' squared difference in transformed signals for units i and j.
 #'
+#' @description
+#' This function computes the coefficients of a quadratic function in φ that represents
+#' the squared difference in transformed signals for units i and j, given the required quantities
+#' computed from \code{required_quantities()}. The function assumes that the inputs are
+#' already in matrix form, with `id` and `time` vectors of length NT.
+#' The function is used only for the initialization of the k-means algorithm if the centers are
+#' initialized randomly from the time averages of the units.
+#'
 #' @param rq List of required quantities from \code{required_quantities()} (matrix-based)
 #' @param i Integer; first unit index
 #' @param j Integer; second unit index
@@ -238,10 +246,7 @@ compute_S <- function(rq, estimated_k_means) {
 
   all_interval_lists <- list()
 
-  # --- Lloyd iterations: assignments given previous centers ---
-  # For m = 3,...,M (since m=2 is the first Lloyd assignment)
-# ...existing code...
-
+  # For m = 2,...,M (since m=1 is the initial assignment)
   # Keep track of the list elements
   curr_length <- length(all_interval_lists)
   curr_counter <- 1
@@ -281,7 +286,6 @@ compute_S <- function(rq, estimated_k_means) {
   final_interval_complement = do.call('c',all_interval_lists)
   final_interval_complement = matrix(final_interval_complement,ncol=2,byrow=T)
   final_interval_complement = intervals::reduce(intervals::Intervals(final_interval_complement),check_valid=FALSE)
-
   final_interval_chisq = intervals::interval_complement(final_interval_complement)
 
   return(final_interval_chisq)

@@ -7,11 +7,12 @@
 panel_homogeneity_test(
   Z,
   id,
+  time,
   OmegaHat,
   estimated_k_means,
   pairs = NULL,
   pcombine_fun = "pharmonic",
-  method = "H1",
+  method = "H2",
   order_k = NULL,
   r = NULL,
   epi = NULL
@@ -21,6 +22,8 @@ panel_homogeneity_test(
 \item{Z}{NT x P matrix}
 
 \item{id}{Numeric vector of unit identifiers}
+
+\item{time}{Numeric vector of time identifiers}
 
 \item{OmegaHat}{Long-run variance matrix (GK x GK)}
 

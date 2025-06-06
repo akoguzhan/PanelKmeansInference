@@ -19,7 +19,7 @@ required_quantities(Z, id, time, k1, k2, gamma, OmegaHat)
 
 \item{gamma}{Vector of length N with estimated cluster labels}
 
-\item{OmegaHat}{GK x GK long-run variance-covariance matrix}
+\item{OmegaHat}{KP x KP long-run variance-covariance matrix}
 }
 \value{
 A list of required quantities for computing truncation intervals
