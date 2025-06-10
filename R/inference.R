@@ -94,10 +94,13 @@ panel_homogeneity_test <- function(
     lrv = "EWC",
     lrv_par = NULL,
     pairs = NULL,
-    pcombine_fun = "pCauchy",
-    method = "A",
+    pcombine_fun = "pGridIU",
+    method = NULL,
     order_k = NULL,
     r = NULL,
+    r_min = 1.05,
+    r_max = 50,
+    n_grid = 25,
     n_cores = 1
 ) {
   # Estimate clusters
@@ -109,7 +112,7 @@ panel_homogeneity_test <- function(
     Kmax = Kmax,
     Ninit = Ninit,
     iter.max = iter.max,
-    n_cores = n_cores  # No parallelization in this function
+    n_cores = n_cores
   )
   K_est <- length(unique(estimated_k_means$final_cluster))
   gamma <- estimated_k_means$final_cluster
@@ -121,10 +124,8 @@ panel_homogeneity_test <- function(
   KP <- K_used * P
 
   # 2. Calculate long-run variance matrix (OmegaHat) for the clustered means
-  # Expand gamma to NT
   id_unique <- sort(unique(id))
   gamma_long <- gamma[match(id, id_unique)]
-  # Generate time-cluster means
   Z_by_group <- matrix(NA, nrow = Tobs, ncol = KP)
   for (k in 1:K_used) {
     idx_k <- gamma_long == k
@@ -167,12 +168,15 @@ panel_homogeneity_test <- function(
     pairs_out[[j]] <- c(k1, k2)
   }
 
+  # Use your cauchy_combine function if requested
   merge_result <- switch(
     pcombine_fun,
     pmean     = pmerge::pmean(p = pvalues, r = r, dependence = method),
     porder    = pmerge::porder(p = pvalues, k = order_k),
     pSimes    = pmerge::pSimes(p = pvalues, method = method),
     pharmonic = pmerge::pharmonic(p = pvalues, method = method),
+    pCauchy   = cauchy_combine(pvalues),
+    pGridIU   = grid_iu_test(pvalues, r_min = r_min, r_max = r_max, n_grid = n_grid),
     stop("Invalid pcombine_fun specified.")
   )
 

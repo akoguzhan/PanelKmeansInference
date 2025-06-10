@@ -20,7 +20,7 @@ EWC <- function(X, lrv_par = NULL) {
   # If lrv_par is NULL, return the sample covariance
   if (is.null(lrv_par)) {
     OmegaHat <- t(X) %*% X / Tobs
-    return(list(S = OmegaHat, lrv_par = NULL))
+    return(list(S = OmegaHat, lrv_par = Tobs))
   }
 
   if (lrv_par < 1 || lrv_par > Tobs) stop("lrv_par must be between 1 and Tobs.")
