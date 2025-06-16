@@ -21,6 +21,9 @@ panel_kmeans_estimation <- function(
     Ninit = 10, iter.max = 10,
     n_cores = 1) {
 
+  if (!is.null(K) && !is.null(Kmax)) {
+    stop("Specify only one of K or Kmax, not both.")
+  }
   if (!is.matrix(Z)) stop("Z must be a matrix")
   if (length(id) != nrow(Z)) stop("Length of id must match number of rows in Z")
   if (length(time) != nrow(Z)) stop("Length of time must match number of rows in Z")
@@ -36,6 +39,7 @@ panel_kmeans_estimation <- function(
     # Parallel or sequential over Ninit initializations
     run_one <- function(init) {
       # Force every cluster to be represented at least once
+
       gamma <- rep(1:K, length.out = N)
       gamma <- sample(gamma, N)
       gamma_tot <- rep(gamma, each = Tobs)
@@ -107,9 +111,6 @@ panel_kmeans_estimation <- function(
     best_idx <- which.min(objs)
     return(results[[best_idx]])
   }
-
-  if (is.null(K)) stop("Either K or Kmax must be specified.")
-  result <- estimate_kmeans(K)
   
   if (!is.null(Kmax)) {
     BIC_opt <- Inf
@@ -133,11 +134,11 @@ panel_kmeans_estimation <- function(
         best_result$BIC_selected_K <- Ki
       }
     }
-
-    if (is.null(best_result)) stop("BIC-based selection failed for all K ∈ [2, Kmax]")
-    return(best_result)
-  }
-
-  if (is.null(result)) stop(paste("Failed to estimate Panel Kmeans with K =", K))
+    result <- best_result
+  } else if (!is.null(K)) {
+    result <- estimate_kmeans(K)
+  } else {
+    stop("Either K or Kmax must be provided.")
+  } 
   return(result)
 }

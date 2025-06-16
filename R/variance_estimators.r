@@ -4,7 +4,7 @@
 #'
 #' @param X A TxK numeric matrix.
 #' @param lrv_par An integer; number of base estimators (e.g., harmonic terms).
-#' If NULL, returns the sample covariance.
+#' If NULL, it is selected using the CPE-optimal rule from Sun (2013).
 #'
 #' @return A list with the KxK estimated long-run variance matrix and the lrv_par used.
 #' @keywords internal
@@ -17,10 +17,9 @@ EWC <- function(X, lrv_par = NULL) {
   # Center the data
   X <- scale(X, scale = FALSE)
 
-  # If lrv_par is NULL, return the sample covariance
+  # If lrv_par is NULL, select it using Sun's (2013) CPE-optimal rule
   if (is.null(lrv_par)) {
-    OmegaHat <- t(X) %*% X / Tobs
-    return(list(S = OmegaHat, lrv_par = Tobs))
+    lrv_par <- min(P*0.4*Tobs^(2/3),Tobs)
   }
 
   if (lrv_par < 1 || lrv_par > Tobs) stop("lrv_par must be between 1 and Tobs.")

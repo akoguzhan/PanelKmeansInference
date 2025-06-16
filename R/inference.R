@@ -183,6 +183,7 @@ panel_homogeneity_test <- function(
   list(
     pairwise_pvalues = pvalues,
     pairs = pairs_out,
-    pvalue_combination = merge_result
+    pvalue_combination = merge_result,
+    clustering = gamma
   )
 }
