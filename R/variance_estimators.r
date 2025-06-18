@@ -19,7 +19,8 @@ EWC <- function(X, lrv_par = NULL) {
 
   # If lrv_par is NULL, select it using Sun's (2013) CPE-optimal rule
   if (is.null(lrv_par)) {
-    lrv_par <- min(P*0.4*Tobs^(2/3),Tobs)
+    lrv_par <- min(P*Tobs^(2/3),Tobs)
+    # lrv_par <- Tobs
   }
 
   if (lrv_par < 1 || lrv_par > Tobs) stop("lrv_par must be between 1 and Tobs.")

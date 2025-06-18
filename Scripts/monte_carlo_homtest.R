@@ -13,13 +13,13 @@ devtools::load_all("C:/Users/og7051ak/Nextcloud/Codes for Papers/Tests with Unkn
 devtools::load_all("C:/Users/og7051ak/Nextcloud/Codes for Papers/Tests with Unknown Clusters/Tools/clusteredEPA")
 
 # Simulation parameters
-set.seed(1234)
-N <- 100
-Tobs <- 200
+set.seed(1)
+N <- 120
+Tobs <- 20
 P <- 2
 K_true <- 3
 Kmax <- 5
-n_sim <- 1000
+n_sim <- 2000
 
 # DGP function
 simulate_panel_data <- function(N, Tobs, P, K, separation = 0) {
@@ -87,13 +87,14 @@ sim_fun <- function(sim) {
     r = mean(c(1/4,4)),
     n_cores = 1 # Each worker uses 1 core
   )
-  hom_pval <- hom_test$pvalue_combination
+  hom_pval <- hom_test$pval
   c(
     hom_pval,
-    grid_iu_test_median(hom_test$pairwise_pvalues, adjust = T)$adjusted_p,
-    iu_test(hom_test$pairwise_pvalues)$pval_combined,
-    hom_test$pairwise_pvalues,
-    cauchy_combine(hom_test$pairwise_pvalues)
+    grid_iu_test(hom_test$pairwise_pvalues)$pval,
+    iu_test(hom_test$pairwise_pvalues)$pval,
+    cauchy_combine(hom_test$pairwise_pvalues),
+    pmerge::pSimes(hom_test$pairwise_pvalues, method = "H"),
+    hom_test$pairwise_pvalues
   )
 }
 
@@ -106,4 +107,5 @@ cat("Mean <0.05 (hom_pval): ", mean(results[,1]<0.05), "\n")
 cat("Mean <0.05 (grid_iu): ", mean(results[,2]<0.05), "\n")
 cat("Mean <0.05 (iu_test): ", mean(results[,3]<0.05), "\n")
 cat("Mean <0.05 (cauchy_test): ", mean(results[,4]<0.05), "\n")
-cat("Mean <0.05 (pairwise): ", mean(results[,5:7]<0.05), "\n")
+cat("Mean <0.05 (simes_test): ", mean(results[,5]<0.05), "\n")
+cat("Mean <0.05 (pairwise): ", mean(results[,6:8]<0.05), "\n")

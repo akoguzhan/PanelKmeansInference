@@ -19,17 +19,14 @@
 #' @param estimated_k_means Output of panel_kmeans_estimation()
 #'
 #' @return List with final_interval (Intervals), test_stat (numeric), pval (numeric)
-#' @importFrom truncdist ptrunc
-#' @export
+#' 
+#' 
 panel_kmeans_inference <- function(
     Z, id, time,
     k1, k2,
     required_quantities,
     estimated_k_means
 ) {
-  if (!requireNamespace("truncdist", quietly = TRUE)) {
-    stop("The 'truncdist' package is required for this function. Please install it.")
-  }
 
   Tobs <- required_quantities$Tobs
   K <- required_quantities$K
@@ -94,13 +91,8 @@ panel_homogeneity_test <- function(
     lrv = "EWC",
     lrv_par = NULL,
     pairs = NULL,
-    pcombine_fun = "pGridIU",
-    method = NULL,
-    order_k = NULL,
-    r = NULL,
-    r_min = 1.05,
-    r_max = 50,
-    n_grid = 25,
+    pcombine_fun = "Genmean_neq",
+    r = -20,
     n_cores = 1
 ) {
   # Estimate clusters
@@ -171,19 +163,19 @@ panel_homogeneity_test <- function(
   # Use your cauchy_combine function if requested
   merge_result <- switch(
     pcombine_fun,
-    pmean     = pmerge::pmean(p = pvalues, r = r, dependence = method),
-    porder    = pmerge::porder(p = pvalues, k = order_k),
-    pSimes    = pmerge::pSimes(p = pvalues, method = method),
-    pharmonic = pmerge::pharmonic(p = pvalues, method = method),
-    pCauchy   = cauchy_combine(pvalues),
-    pGridIU   = grid_iu_test(pvalues, r_min = r_min, r_max = r_max, n_grid = n_grid),
+    Geomean     = Geomean_pcombine(pvalues),
+    Genmean     = Genmean_pcombine(pvalues, r = r),
+    Genmean_neq = Genmean_rneg_pcombine(pvalues, r = r),
+    iu          = iu_pcombine(pvalues, r = r),
+    bonferroni  = bonferroni_pcombine(pvalues),
+    cauchy      = cauchy_pcombine(pvalues),
     stop("Invalid pcombine_fun specified.")
   )
 
   list(
     pairwise_pvalues = pvalues,
     pairs = pairs_out,
-    pvalue_combination = merge_result,
+    pval = merge_result,
     clustering = gamma
   )
 }
