@@ -23,13 +23,11 @@
 #' 
 panel_kmeans_inference <- function(
     Z, id, time,
-    k1, k2,
     required_quantities,
     estimated_k_means
 ) {
 
   Tobs <- required_quantities$Tobs
-  K <- required_quantities$K
   P <- required_quantities$P
   Omega_ZTv_norm <- required_quantities$Omega_ZTv_norm
 
@@ -50,7 +48,7 @@ panel_kmeans_inference <- function(
 
   denom <- S^2
   numer <- suppressWarnings(intervals::interval_intersection(gestat, denom))
-  pval <- TChisqRatioApprox(K * P, numer, denom)
+  pval <- TChisqRatioApprox(P, numer, denom)
 
   list(
     final_interval = S,
@@ -76,8 +74,6 @@ panel_kmeans_inference <- function(
 #' @param lrv_par Optional; parameters for the long-run variance estimator
 #' @param pairs Optional matrix of cluster index pairs to test (each row: c(k1, k2)). If NULL, all unique pairs are tested.
 #' @param pcombine_fun Function to combine p-values: "pmean", "porder", "pSimes", "pharmonic", "pCauchy"
-#' @param method Variant used by pmerge (e.g., "H1", "I", "G", etc.)
-#' @param order_k Used by porder
 #' @param r Used by pmean
 #'
 #' @return List with pairwise_pvalues, pairs, pvalue_combination
@@ -152,8 +148,6 @@ panel_homogeneity_test <- function(
       Z = Z,
       id = id,
       time = time,
-      k1 = k1,
-      k2 = k2,
       required_quantities = required_quantities(Z, id, time, k1, k2, gamma, OmegaHat),
       estimated_k_means = estimated_k_means
     )$pval
@@ -178,4 +172,92 @@ panel_homogeneity_test <- function(
     pval = merge_result,
     clustering = gamma
   )
+}
+
+#' Selective Inference: Test if Each Cluster Mean is Zero
+#'
+#' Performs a selective inference test for H0: mu_k = 0 for each cluster k.
+#'
+#' @param Z NT x P matrix of data.
+#' @param id Vector of unit identifiers (length NT).
+#' @param time Vector of time identifiers (length NT).
+#' @param K Integer; number of clusters. Required unless Kmax is provided.
+#' @param Kmax Optional; if provided, perform BIC-based selection from 2 to Kmax clusters.
+#' @param Ninit Number of k-means initializations.
+#' @param iter.max Max iterations for k-means.
+#' @param lrv Long-run variance method: \"EWC\" or \"NeweyWest\".
+#' @param lrv_par Parameter for long-run variance estimator.
+#' @param n_cores Number of cores to use.
+#'
+#' @return List with individual p-values and estimated clustering.
+#' @export
+panel_bycluster_tests <- function(
+  Z, id, time,
+  K = NULL,
+  Kmax = NULL,
+  Ninit = 10,
+  iter.max = 10,
+  lrv = "EWC",
+  lrv_par = NULL,
+  n_cores = 1
+) {
+  # Step 1: Estimate clusters
+  bycluster_res <- panel_kmeans_estimation(
+    Z = Z,
+    id = id,
+    time = time,
+    K = K,
+    Kmax = Kmax,
+    Ninit = Ninit,
+    iter.max = iter.max,
+    n_cores = n_cores
+  )
+  gamma <- bycluster_res$final_cluster
+  K_est <- length(unique(gamma))
+
+  N <- length(unique(id))
+  Tobs <- length(unique(time))
+  P <- ncol(Z)
+  KP <- K_est * P
+
+  # Step 2: Long-run variance matrix for group means
+  id_unique <- sort(unique(id))
+  gamma_long <- gamma[match(id, id_unique)]
+  Z_by_group <- matrix(NA, nrow = Tobs, ncol = KP)
+  for (k in 1:K_est) {
+    idx_k <- gamma_long == k
+    Z_k <- Z[idx_k, , drop = FALSE]
+    time_k <- time[idx_k]
+    Zbar_k <- aggregate_matrix(Z_k, time_k)  # Tobs x P
+    Z_by_group[, ((k - 1) * P + 1):(k * P)] <- Zbar_k
+  }
+
+  OmegaHat <- switch(
+    lrv,
+    EWC = EWC(Z_by_group, lrv_par = lrv_par)$S,
+    NeweyWest = NeweyWest(Z_by_group, lrv_par = lrv_par),
+    stop("Unknown lrv. Use 'EWC' or 'NeweyWest'.")
+  )
+
+  # Step 3: Loop over clusters, test H0: mu_k = 0
+  pvals <- numeric(K_est)
+  for (k in 1:K_est) {
+    rq <- required_quantities(
+      Z = Z, id = id, time = time,
+      k1 = k, k2 = 0,
+      gamma = gamma,
+      OmegaHat = OmegaHat
+    )
+
+    pvals[k] <- panel_kmeans_inference(
+      Z = Z, id = id, time = time,
+      required_quantities = rq,
+      estimated_k_means = bycluster_res
+    )$pval
+  }
+
+  return(list(
+    bycluster_pvals = pvals,
+    clustering = gamma
+  ))
 }

@@ -32,7 +32,7 @@ panel_kmeans_estimation <- function(
   Tobs <- length(unique(time))
   P <- ncol(Z)
   NT <- N * Tobs
-  kappa <- 3
+  kappa <- 1.5
 
   estimate_kmeans <- function(K) {
 
@@ -42,7 +42,7 @@ panel_kmeans_estimation <- function(
 
       gamma <- rep(1:K, length.out = N)
       gamma <- sample(gamma, N)
-      gamma_tot <- rep(gamma, each = Tobs)
+      gamma_tot <- gamma[match(id, unique(id))]
 
       iter <- 1
       cluster_assign_list <- list()
@@ -74,7 +74,7 @@ panel_kmeans_estimation <- function(
           converged <- TRUE
         }
         gamma <- gamma_new
-        gamma_tot <- rep(gamma, each = Tobs)
+        gamma_tot <- gamma[match(id, unique(id))]
         iter <- iter + 1
       }
 
@@ -121,7 +121,7 @@ panel_kmeans_estimation <- function(
 
       theta <- result$centers[[result$iter]]
       gamma <- result$final_cluster
-      gamma_tot <- rep(gamma, each = Tobs)
+      gamma_tot <- gamma[match(id, unique(id))]
       D <- model.matrix(~ factor(gamma_tot) - 1)
       U <- Z - D %*% theta
       Sigma_hat <- t(U) %*% U / NT

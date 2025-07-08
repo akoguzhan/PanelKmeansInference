@@ -64,14 +64,13 @@ clusterEvalQ(cl, {
   devtools::load_all("C:/Users/og7051ak/Nextcloud/Codes for Papers/Tests with Unknown Clusters/Tools/clusteredEPA", quiet = TRUE)
 })
 
-clusterExport(cl, varlist = c("simulate_panel_data", "panel_homogeneity_test", 
-                              "grid_iu_test", "iu_test", "cauchy_combine", "N", "Tobs", "P", "K_true", "alpha"),
+clusterExport(cl, varlist = c("simulate_panel_data", "panel_homogeneity_test", "N", "Tobs", "P", "K_true", "alpha"),
               envir = environment())
 
 sim_fun <- function(sim) {
   # separation = 1 power
   # separation = 0 size
-  data <- simulate_panel_data(N, Tobs, P, K_true, separation = 0)
+  data <- simulate_panel_data(N, Tobs, P, K_true, separation = 1)
   Z <- data$Z
   id <- data$id
   time <- data$time
@@ -82,19 +81,13 @@ sim_fun <- function(sim) {
     id = id,
     time = time,
     K = 3,
-    pcombine_fun = "pmean",
-    method = "A",
-    r = mean(c(1/4,4)),
+    pcombine_fun = "Genmean_neq",
+    r = -20,
     n_cores = 1 # Each worker uses 1 core
   )
   hom_pval <- hom_test$pval
   c(
     hom_pval,
-    grid_iu_test(hom_test$pairwise_pvalues)$pval,
-    iu_test(hom_test$pairwise_pvalues)$pval,
-    cauchy_combine(hom_test$pairwise_pvalues),
-    pmerge::pSimes(hom_test$pairwise_pvalues, method = "H"),
-    hom_test$pairwise_pvalues
   )
 }
 
