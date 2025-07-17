@@ -19,6 +19,7 @@ panel_kmeans_estimation <- function(
     Z, id, time,
     K = NULL, Kmax = NULL,
     Ninit = 10, iter.max = 10,
+    kappa = 1.5,
     n_cores = 1) {
 
   if (!is.null(K) && !is.null(Kmax)) {
@@ -32,7 +33,6 @@ panel_kmeans_estimation <- function(
   Tobs <- length(unique(time))
   P <- ncol(Z)
   NT <- N * Tobs
-  kappa <- 1.5
 
   estimate_kmeans <- function(K) {
 
@@ -119,14 +119,56 @@ panel_kmeans_estimation <- function(
       result <- estimate_kmeans(Ki)
       if (is.null(result)) next
 
-      theta <- result$centers[[result$iter]]
       gamma <- result$final_cluster
+      theta <- result$centers[[result$iter]]
       gamma_tot <- gamma[match(id, unique(id))]
       D <- model.matrix(~ factor(gamma_tot) - 1)
       U <- Z - D %*% theta
       Sigma_hat <- t(U) %*% U / NT
       K_tot <- length(c(theta)) + length(gamma)
-      BIC <- log(det(Sigma_hat)) + K_tot * kappa * log(NT) / NT
+
+      # Use the EWC long-run variance estimator
+      # id_unique <- sort(unique(id))
+      # gamma_long <- gamma[match(id, id_unique)]
+      # Z_by_group <- matrix(NA, nrow = Tobs, ncol = Ki * P)
+      # for (k in 1:Ki) {
+      #   idx_k <- gamma_long == k
+      #   Z_k <- Z[idx_k, , drop = FALSE]
+      #   time_k <- time[idx_k]
+      #   Zbar_k <- aggregate_matrix(Z_k, time_k)  # Tobs x P
+      #   Z_by_group[, ((k - 1) * P + 1):(k * P)] <- Zbar_k
+      # }
+      # EWCest <- EWC(Z_by_group, lrv_par = NULL)
+      # Sigma_hat <- EWCest$S
+      # lrv_par <- EWCest$lrv_par
+      # Sigma_hat <- Sigma_hat * lrv_par / (lrv_par - Ki * P + 1)
+      # Sigma_hat <- NeweyWest(Z_by_group, lrv_par = NULL) * Tobs / (Tobs - Ki * P + 1)
+      # Sigma_hat <- NeweyWest(Z_by_group, lrv_par = 0) # Overestimates
+
+      # epsilon_est <- estimate_alpha(Z, id, time)
+      # N_eff <- N^(2 * (1 - epsilon_est))
+
+      # cluster_sizes <- table(gamma)  # Named vector: cluster -> N_k
+      # weighted_penalty <- 0
+
+      # for (k in 1:Ki) {
+      #   N_k <- as.numeric(cluster_sizes[as.character(k)])
+      #   N_k_eff <- N_k^(2 * (1 - epsilon_est))  # same alpha across clusters
+      #   weight_k <- N_k / N  # still use relative cluster size
+      #   penalty_k <- P * log(N_k_eff * Tobs) / (N_k_eff * Tobs)
+      #   weighted_penalty <- weighted_penalty + weight_k * penalty_k
+      # }
+
+      # N_penalty <- N * kappa * log(N_eff * Tobs) / (N_eff * Tobs)
+      # penalty_total <- weighted_penalty + N_penalty
+      # BIC <- log(det(Sigma_hat)) + kappa * penalty_total
+
+      # BIC <- log(det(Sigma_hat)) + (Ki * P + N) * kappa * sqrt(NT) / NT
+      # BIC <- log(det(Sigma_hat)) + (Ki * P + N) * kappa * 1 / (5 * log(Tobs) * Tobs^(1/8)) # Liu et al. (2020)
+      BIC <- log(det(Sigma_hat)) + (Ki * P + N) * kappa * log(NT) / (NT)
+      # BIC <- log(det(Sigma_hat)) + (Ki * P + N) * kappa * log(N_eff * Tobs) / (N_eff * Tobs)
+      # BIC <- log(det(Sigma_hat)) + (Ki * P + N) * 2 * log(log(NT)) / NT
+      # BIC <- log(det(Sigma_hat)) + (Ki * P + N) * 2 / NT
 
       if (BIC < BIC_opt) {
         BIC_opt <- BIC
@@ -141,4 +183,94 @@ panel_kmeans_estimation <- function(
     stop("Either K or Kmax must be provided.")
   } 
   return(result)
+}
+
+estimate_alpha <- function(Z, id, time) {
+  N <- length(unique(id))
+  Tobs <- length(unique(time))
+
+  Z_array <- array(NA, dim = c(N, Tobs, ncol(Z)))
+  for (p in 1:ncol(Z)) {
+    Z_array[, , p] <- tapply(Z[, p], list(id, time), mean)
+  }
+
+  alpha_vec <- sapply(1:ncol(Z), function(p) {
+    cs_avg <- colMeans(Z_array[, , p])
+    var_cs_avg <- var(cs_avg)
+    alpha <- 1 + 0.5 * log(var_cs_avg) / log(N)
+    return(alpha)
+  })
+  mean(alpha_vec, na.rm = TRUE)
+}
+
+panel_kmeans_cv_time <- function(
+    Z, id, time,
+    Kmax,
+    nfold = 5,
+    Ninit = 10, iter.max = 10,
+    n_cores = 1) {
+  
+  if (!is.matrix(Z)) stop("Z must be a matrix")
+  if (length(id) != nrow(Z)) stop("Length of id must match number of rows in Z")
+  if (length(time) != nrow(Z)) stop("Length of time must match number of rows in Z")
+
+  N <- length(unique(id))
+  T_all <- sort(unique(time))
+  Tobs <- length(T_all)
+  P <- ncol(Z)
+
+  # Split time into folds
+  time_folds <- split(T_all, cut(seq_along(T_all), breaks = nfold, labels = FALSE))
+
+  cv_errors <- numeric(Kmax - 1)
+  names(cv_errors) <- paste0("K=", 2:Kmax)
+
+  for (K in 2:Kmax) {
+    fold_errors <- numeric(nfold)
+
+    for (f in 1:nfold) {
+      test_times <- time_folds[[f]]
+      train_idx <- !(time %in% test_times)
+      test_idx  <- (time %in% test_times)
+
+      # Estimate K-means on training set
+      res <- panel_kmeans_estimation(
+        Z = Z[train_idx, , drop = FALSE],
+        id = id[train_idx],
+        time = time[train_idx],
+        K = K,
+        Ninit = Ninit,
+        iter.max = iter.max,
+        n_cores = n_cores
+      )
+
+      if (is.null(res)) {
+        fold_errors[f] <- Inf
+        next
+      }
+
+      # Get cluster centers and assignment
+      gamma_train <- res$final_cluster
+      theta_hat <- res$centers[[res$iter]]
+      gamma_tot <- gamma_train[match(id[test_idx], sort(unique(id)))]
+
+      # Compute test error
+      D_test <- model.matrix(~ factor(gamma_tot) - 1)
+      U_test <- Z[test_idx, , drop = FALSE] - D_test %*% theta_hat
+      fold_errors[f] <- mean(rowSums(U_test^2))
+    }
+
+    cv_errors[K - 1] <- mean(fold_errors)
+  }
+
+  best_K <- which.min(cv_errors) + 1
+
+  final_result <- panel_kmeans_estimation(
+    Z = Z, id = id, time = time,
+    K = best_K, Ninit = Ninit,
+    iter.max = iter.max, n_cores = n_cores
+  )
+
+  final_result$CV_selected_K <- best_K
+  final_result
 }
