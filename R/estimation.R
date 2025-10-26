@@ -127,42 +127,6 @@ panel_kmeans_estimation <- function(
       Sigma_hat <- t(U) %*% U / NT
       K_tot <- length(c(theta)) + length(gamma)
 
-      # Use the EWC long-run variance estimator
-      # id_unique <- sort(unique(id))
-      # gamma_long <- gamma[match(id, id_unique)]
-      # Z_by_group <- matrix(NA, nrow = Tobs, ncol = Ki * P)
-      # for (k in 1:Ki) {
-      #   idx_k <- gamma_long == k
-      #   Z_k <- Z[idx_k, , drop = FALSE]
-      #   time_k <- time[idx_k]
-      #   Zbar_k <- aggregate_matrix(Z_k, time_k)  # Tobs x P
-      #   Z_by_group[, ((k - 1) * P + 1):(k * P)] <- Zbar_k
-      # }
-      # EWCest <- EWC(Z_by_group, lrv_par = NULL)
-      # Sigma_hat <- EWCest$S
-      # lrv_par <- EWCest$lrv_par
-      # Sigma_hat <- Sigma_hat * lrv_par / (lrv_par - Ki * P + 1)
-      # Sigma_hat <- NeweyWest(Z_by_group, lrv_par = NULL) * Tobs / (Tobs - Ki * P + 1)
-      # Sigma_hat <- NeweyWest(Z_by_group, lrv_par = 0) # Overestimates
-
-      # epsilon_est <- estimate_alpha(Z, id, time)
-      # N_eff <- N^(2 * (1 - epsilon_est))
-
-      # cluster_sizes <- table(gamma)  # Named vector: cluster -> N_k
-      # weighted_penalty <- 0
-
-      # for (k in 1:Ki) {
-      #   N_k <- as.numeric(cluster_sizes[as.character(k)])
-      #   N_k_eff <- N_k^(2 * (1 - epsilon_est))  # same alpha across clusters
-      #   weight_k <- N_k / N  # still use relative cluster size
-      #   penalty_k <- P * log(N_k_eff * Tobs) / (N_k_eff * Tobs)
-      #   weighted_penalty <- weighted_penalty + weight_k * penalty_k
-      # }
-
-      # N_penalty <- N * kappa * log(N_eff * Tobs) / (N_eff * Tobs)
-      # penalty_total <- weighted_penalty + N_penalty
-      # BIC <- log(det(Sigma_hat)) + kappa * penalty_total
-
       # BIC <- log(det(Sigma_hat)) + (Ki * P + N) * kappa * sqrt(NT) / NT
       # BIC <- log(det(Sigma_hat)) + (Ki * P + N) * kappa * 1 / (5 * log(Tobs) * Tobs^(1/8)) # Liu et al. (2020)
       BIC <- log(det(Sigma_hat)) + (Ki * P + N) * kappa * log(NT) / (NT)
